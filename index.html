@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Clima</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1f6feb">
+<style>
+:root{--bg:#eef3f9;--card:#fff;--tx:#14202e;--mut:#5b6b7c;--ac:#1f6feb;--bd:#dbe3ec;--hero:linear-gradient(135deg,#4f9bff,#1f6feb);color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1621;--card:#17222f;--tx:#e8eef5;--mut:#92a3b5;--ac:#5aa2ff;--bd:#26374a;--hero:linear-gradient(135deg,#1d4f91,#16335c);color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:14px}
+h2{font-size:1rem;margin:0 0 .6rem}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.top button{font:inherit;border:0;background:var(--card);color:var(--tx);border-radius:99px;padding:8px 12px;box-shadow:0 1px 3px #0002;cursor:pointer}
+.card{background:var(--card);border-radius:18px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px #0001}
+.hero{background:var(--hero);color:#fff;border-radius:22px;padding:18px;margin-bottom:12px}
+.hero .t{display:flex;align-items:center;gap:12px}.hero .e{font-size:3.4rem}.hero b{font-size:3.4rem;line-height:1}
+.hero .s{opacity:.9;font-size:.92rem;margin-top:6px}
+.days{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px}
+.d{background:var(--bg);border-radius:14px;padding:10px;text-align:center}
+.d .e{font-size:1.9rem}.d b{display:block}.d .m{color:var(--mut);font-size:.8rem}
+.mut{color:var(--mut);font-size:.85rem}
+svg{width:100%;height:auto;display:block}
+svg text{fill:var(--mut);font-size:12px;font-family:inherit}
+.hot{stroke:#e8743b;fill:none;stroke-width:3}.cold{stroke:#3b8fe8;fill:none;stroke-width:3}
+.band{fill:#e8743b22}.bar{fill:#3b8fe8}
+.smn{border-left:5px solid #0a8f5b}
+.badge{display:inline-block;background:#0a8f5b;color:#fff;border-radius:99px;padding:1px 9px;font-size:.75rem;margin-left:6px}
+.warn{color:#c77a00}
+table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{padding:6px 4px;text-align:left;border-bottom:1px solid var(--bd)}th{color:var(--mut)}
+#err{color:#c0392b}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.tabs button{font:inherit;font-size:.88rem;border:1px solid var(--bd);background:var(--bg);color:var(--tx);border-radius:99px;padding:6px 12px;cursor:pointer}
+.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.mapbox iframe{width:100%;height:340px;border:0;border-radius:12px}
+.mapbox .ph{height:120px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:12px;color:var(--mut)}
+#modal{display:none;position:fixed;inset:0;background:#000c;z-index:9;padding:10px}
+#modal.on{display:flex;flex-direction:column;gap:8px}
+#modal iframe{flex:1;width:100%;border:0;border-radius:12px;background:#fff}
+#modal button{align-self:flex-end;font:inherit;border:0;border-radius:99px;padding:8px 16px;background:#fff;color:#111}
+
+</style>
+</head>
+<body>
+<main>
+<div class="top"><b id="lugar" style="font-size:1.2rem">Mar del Plata</b><span><button id="gps">📍</button> <button id="ref">↻ Actualizar</button></span></div>
+<p id="err"></p>
+<div class="hero" id="hero">Cargando…</div>
+<div class="card"><h2>Resumen</h2><div id="conc" class="mut">Cargando…</div></div>
+<div class="card"><h2>Próximos 5 días</h2><div class="days" id="dias"></div></div>
+<div class="card"><h2>🌡️ Temperatura</h2><div id="gt"></div><p class="mut">Línea naranja: máximas. Línea azul: mínimas. La franja muestra cuánto difieren los modelos entre sí; si es angosta, el pronóstico es más confiable.</p></div>
+<div class="card"><h2>🌧️ Probabilidad de lluvia</h2><div id="gl"></div></div>
+<div class="card"><h2>🛰️ Nubes y satélite</h2>
+<div class="tabs" id="tabs"><button data-o="satellite">Satélite</button><button data-o="clouds">Nubes (pronóstico)</button><button data-o="radar">Radar de lluvia</button><button id="amp">⛶ Ampliar</button></div>
+<div class="mapbox" id="mapbox"><div class="ph">Tocá una opción para ver el mapa</div></div>
+<p class="mut">Mapa de Windy centrado en tu ubicación. Se carga solo al tocarlo, para no gastar datos.</p></div>
+<div id="modal"><button id="cerrar">✕ Cerrar</button><iframe id="big" title="Mapa ampliado"></iframe></div>
+<div class="card"><h2>🏆 Ranking de aciertos</h2><div id="rank"></div></div>
+<div class="card smn"><h2>Servicio Meteorológico Nacional <span class="badge">oficial</span></h2><div id="smn"></div></div>
+<p class="mut" id="fecha"></p>
+</main>
+<script>
+var MODELOS="ecmwf_ifs025,gfs_seamless,icon_seamless,gem_seamless".split(",");
+/* Foto del SMN copiada a mano (no se actualiza sola). Para renovarla, pedírsela a Claude. */
+var SMN={copiado:"2026-11-07",dias:{"2026-11-07":{mn:8,mx:14,t:"Parcialmente nublado, viento sur 23–31 km/h, sin lluvia"},"2026-11-08":{mn:6,mx:20,t:"Despejado a ligeramente nublado, viento sur hasta 22 km/h"}}};
+var loc={lat:-38.0055,lon:-57.5426,name:"Mar del Plata"};
+try{var q=localStorage.getItem("clima_loc");if(q)loc=JSON.parse(q)}catch(e){}
+function $(i){return document.getElementById(i)}
+function R(x){return Math.round(x)}
+function A(a){a=a.filter(function(x){return x!=null});return a.length?a.reduce(function(p,c){return p+c},0)/a.length:null}
+function EM(c){return c===0?"☀️":c<=2?"⛅":c===3?"☁️":c<=48?"🌫️":c<=57?"🌦️":c<=67?"🌧️":c<=77?"🌨️":c<=82?"🌧️":c>=95?"⛈️":"🌦️"}
+function ICO(x){
+  if(x.pp!=null&&x.pp>=50)return x.wc>=95?"⛈️":"🌧️";
+  if(x.pp!=null&&x.pp>=30)return "🌦️";
+  var c=x.cc==null?0:x.cc;
+  return c<20?"☀️":c<45?"🌤️":c<70?"⛅":"☁️";
+}
+var DS=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+async function cargar(){
+  $("err").textContent="";$("lugar").textContent=loc.name;if(mapaOv)mapa();
+  var b="https://api.open-meteo.com/v1/forecast?latitude="+loc.lat+"&longitude="+loc.lon+"&timezone=America/Argentina/Buenos_Aires&forecast_days=5";
+  try{
+    var r1=await fetch(b+"&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_gusts_10m,is_day&daily=weather_code,precipitation_probability_max,cloud_cover_mean");
+    var r2=await fetch(b+"&models="+MODELOS.join(",")+"&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max");
+    var r3=await fetch(b+"&past_days=7&daily=temperature_2m_max,temperature_2m_min,precipitation_sum");if(!r1.ok||!r2.ok||!r3.ok)throw 1;
+    pintar(await r1.json(),await r2.json(),await r3.json());
+  }catch(e){$("err").textContent="No pude obtener los datos. Revisá la conexión y tocá Actualizar."}
+}
+function pintar(a,b,ob){
+  var c=a.current,d=b.daily,n=d.time.length,D=[],hoy=c.time.slice(0,10),ST=stats(ob.daily,hoy);W=ST.w;
+  for(var i=0;i<n;i++){
+    var G=function(k){return MODELOS.map(function(m){return d[k+"_"+m][i]})},NN=function(x){return x!=null};
+    var rmx=G("temperature_2m_max"),rmn=G("temperature_2m_min"),rpr=G("precipitation_sum");
+    var mx=rmx.filter(NN),mn=rmn.filter(NN),pr=rpr.filter(NN),vi=G("wind_speed_10m_max").filter(NN);
+    var dt=new Date(d.time[i]+"T12:00:00");
+    D.push({f:d.time[i],n:i===0?"Hoy":i===1?"Mañana":DS[dt.getDay()]+" "+dt.getDate(),mx:WA(rmx),mn:WA(rmn),rmx:rmx,rmn:rmn,rpr:rpr,xlo:Math.min.apply(null,mx),xhi:Math.max.apply(null,mx),mm:WA(rpr),vi:A(vi),pp:a.daily.precipitation_probability_max[i],wc:a.daily.weather_code[i],cc:a.daily.cloud_cover_mean[i],sp:Math.max.apply(null,mx)-Math.min.apply(null,mx)});
+  }
+  $("hero").innerHTML='<div class="t"><span class="e">'+(c.is_day===0&&c.weather_code<=2?"🌙":EM(c.weather_code))+'</span><b>'+R(c.temperature_2m)+'°</b><div>Sensación '+R(c.apparent_temperature)+'°<br>Máx '+R(D[0].mx)+'° · Mín '+R(D[0].mn)+'°</div></div><div class="s">Humedad '+c.relative_humidity_2m+'% · Viento '+R(c.wind_speed_10m)+' km/h (ráfagas '+R(c.wind_gusts_10m)+')</div>';
+  $("dias").innerHTML=D.map(function(x){return'<div class="d"><b>'+x.n+'</b><span class="e">'+ICO(x)+'</span><b>'+R(x.mx)+'° <span class="m">/ '+R(x.mn)+'°</span></b><span class="m">☔ '+(x.pp==null?"–":x.pp+"%")+'<br>💨 '+R(x.vi)+' km/h</span></div>'}).join("");
+  registrar(D[1],hoy);rank(ST);grafTemp(D);grafLluvia(D);smn(D);resumen(D);
+  $("fecha").textContent="Actualizado: "+new Date().toLocaleString("es-AR")+" · datos de Open-Meteo (ECMWF, GFS, ICON, GEM)";
+}
+function grafTemp(D){
+  var W=600,H=220,L=34,Rr=16,T=24,B=30,n=D.length;
+  var lo=Math.floor(Math.min.apply(null,D.map(function(x){return x.mn}))-2),hi=Math.ceil(Math.max.apply(null,D.map(function(x){return x.xhi}))+2);
+  var X=function(i){return L+(W-L-Rr)*i/(n-1)},Y=function(v){return T+(H-T-B)*(1-(v-lo)/(hi-lo))};
+  var s='<svg viewBox="0 0 '+W+' '+H+'">';
+  for(var v=Math.ceil(lo/5)*5;v<=hi;v+=5)s+='<line x1="'+L+'" x2="'+(W-Rr)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="#8884" stroke-dasharray="3 4"/><text x="2" y="'+(Y(v)+4)+'">'+v+'°</text>';
+  var up=D.map(function(x,i){return X(i)+","+Y(x.xhi)}),dn=D.map(function(x,i){return X(i)+","+Y(x.xlo)}).reverse();
+  s+='<polygon class="band" points="'+up.concat(dn).join(" ")+'"/>';
+  s+='<polyline class="hot" points="'+D.map(function(x,i){return X(i)+","+Y(x.mx)}).join(" ")+'"/><polyline class="cold" points="'+D.map(function(x,i){return X(i)+","+Y(x.mn)}).join(" ")+'"/>';
+  D.forEach(function(x,i){s+='<circle cx="'+X(i)+'" cy="'+Y(x.mx)+'" r="4" fill="#e8743b"/><circle cx="'+X(i)+'" cy="'+Y(x.mn)+'" r="4" fill="#3b8fe8"/><text x="'+X(i)+'" y="'+(Y(x.mx)-9)+'" text-anchor="middle" style="fill:#e8743b;font-weight:700">'+R(x.mx)+'°</text><text x="'+X(i)+'" y="'+(Y(x.mn)+18)+'" text-anchor="middle" style="fill:#3b8fe8;font-weight:700">'+R(x.mn)+'°</text><text x="'+X(i)+'" y="'+(H-6)+'" text-anchor="middle">'+x.n+'</text>'});
+  $("gt").innerHTML=s+'</svg>';
+}
+function grafLluvia(D){
+  var W=600,H=190,B=40,T=22,n=D.length,bw=W/n,Y=function(v){return T+(H-T-B)*(1-v/100)},s='<svg viewBox="0 0 '+W+' '+H+'">';
+  s+='<line x1="0" x2="'+W+'" y1="'+Y(50)+'" y2="'+Y(50)+'" stroke="#c77a00" stroke-dasharray="5 4"/><text x="4" y="'+(Y(50)-5)+'" style="fill:#c77a00">50%: lluvia probable</text>';
+  D.forEach(function(x,i){
+    var p=x.pp==null?0:x.pp,cx=bw*i+bw/2,top=Y(p),alta=p>=50;
+    s+='<rect x="'+(cx-22)+'" y="'+top+'" width="44" height="'+Math.max(H-B-top,2)+'" rx="6" style="fill:'+(alta?"#3b8fe8":"#9db4cc66")+'"/>';
+    s+='<text x="'+cx+'" y="'+(top-6)+'" text-anchor="middle" style="font-weight:700">'+p+'%</text>';
+    s+='<text x="'+cx+'" y="'+(H-22)+'" text-anchor="middle">'+x.n+'</text><text x="'+cx+'" y="'+(H-7)+'" text-anchor="middle">'+(x.mm>=0.1?x.mm.toFixed(1)+" mm":"sin lluvia")+'</text>';
+  });
+  $("gl").innerHTML=s+'</svg><p class="mut">Las barras azules superan el 50 %: ahí conviene llevar paraguas. Abajo, los milímetros que esperan los modelos.</p>';
+}
+function smn(D){
+  var rows="",hoy=D[0].f,viejo=true;
+  D.forEach(function(x){var o=SMN.dias[x.f];if(o){viejo=false;rows+='<tr><td><b>'+x.n+'</b></td><td>'+o.mn+'° / '+o.mx+'°</td><td>'+R(x.mn)+'° / '+R(x.mx)+'°</td><td>'+o.t+'</td></tr>'}});
+  $("smn").innerHTML=viejo?'<p class="warn">La foto del SMN guardada en esta página ya venció. Pedile a Claude que la renueve.</p>':'<table><tr><th>Día</th><th>SMN</th><th>Modelos</th><th>Detalle SMN</th></tr>'+rows+'</table><p class="mut">Datos del SMN copiados el '+SMN.copiado.split("-").reverse().join("/")+'; no se actualizan solos. Para fechas posteriores usá la app oficial del SMN.</p>';
+}
+function resumen(D){
+  var h=D[0],m=D[1],t=[];
+  t.push("<b>Hoy:</b> "+(h.mx<15?"fresco":h.mx<23?"templado":"caluroso")+", máxima de "+R(h.mx)+"° "+(h.pp>=50?"y lluvia probable":h.pp>=20?"y algo de chance de lluvia":"y sin lluvia")+(h.vi>=30?", con viento fuerte":"")+".");
+  t.push("<b>Mañana:</b> "+R(m.mn)+"° a "+R(m.mx)+"°"+(m.pp>=50?", con lluvia probable":"")+".");
+  var seco=D.filter(function(x){return x.pp!=null&&x.pp>=50}).map(function(x){return x.n});
+  t.push(seco.length?"<b>Días con lluvia probable:</b> "+seco.join(", ")+".":"<b>Sin lluvia probable</b> en los próximos "+D.length+" días.");
+  t.push("Acuerdo entre modelos hoy: "+(h.sp<=2?"alto":h.sp<=4?"medio":"bajo")+".");
+  $("conc").innerHTML=t.join("<br>");
+}
+var W=[1,1,1,1],NOM={ecmwf_ifs025:"ECMWF",gfs_seamless:"GFS",icon_seamless:"ICON",gem_seamless:"GEM"};
+function WA(a){var t=0,w=0;a.forEach(function(x,k){if(x!=null){t+=x*W[k];w+=W[k]}});return w?t/w:null}
+function leer(){try{return JSON.parse(localStorage.getItem("clima_log")||"{}")}catch(e){return {}}}
+function registrar(m,hoy){
+  var L=leer();
+  if(!L[m.f]||L[m.f].iss===hoy)L[m.f]={iss:hoy,mx:m.rmx,mn:m.rmn,pr:m.rpr};
+  var corte=new Date(Date.parse(hoy)-60*864e5).toISOString().slice(0,10);
+  Object.keys(L).forEach(function(f){if(f<corte)delete L[f]});
+  try{localStorage.setItem("clima_log",JSON.stringify(L))}catch(e){}
+}
+function stats(o,hoy){
+  var L=leer(),E=MODELOS.map(function(){return{e:0,n:0,ra:0,rn:0}}),dias=0;
+  Object.keys(L).forEach(function(f){
+    var i=o.time.indexOf(f);if(i<0||f>=hoy)return;
+    var om=o.temperature_2m_max[i],on=o.temperature_2m_min[i],op=o.precipitation_sum[i];
+    if(om==null||on==null)return;dias++;
+    MODELOS.forEach(function(m,k){
+      var x=L[f].mx[k],y=L[f].mn[k];if(x==null||y==null)return;
+      E[k].e+=(Math.abs(x-om)+Math.abs(y-on))/2;E[k].n++;
+      var p=L[f].pr[k];if(p!=null&&op!=null){E[k].rn++;if((p>=1)===(op>=1))E[k].ra++}
+    });
+  });
+  var w=E.map(function(e){return dias>=3&&e.n?1/Math.pow(e.e/e.n+0.5,2):1});
+  return{errs:E,days:dias,w:w};
+}
+function rank(ST){
+  var f=MODELOS.map(function(m,k){var e=ST.errs[k];return{n:NOM[m],err:e.n?e.e/e.n:null,ra:e.ra,rn:e.rn,w:ST.w[k]}}).filter(function(x){return x.err!=null}).sort(function(a,b){return a.err-b.err});
+  if(!f.length){$("rank").innerHTML='<p class="mut">Todavía no hay días para evaluar. Cada vez que abrís la app guarda el pronóstico de mañana y, cuando ese día pasa, lo compara con lo que ocurrió. Abrila a diario: con 3 días el ranking empieza a mejorar el promedio.</p>';return}
+  var tw=f.reduce(function(p,x){return p+x.w},0),h='<table><tr><th>#</th><th>Modelo</th><th>Error medio</th><th>Lluvia</th><th>Peso</th></tr>';
+  f.forEach(function(x,i){h+='<tr><td>'+(i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1)+'</td><td><b>'+x.n+'</b></td><td>'+x.err.toFixed(1)+' °C</td><td>'+x.ra+'/'+x.rn+'</td><td>'+R(100*x.w/tw)+'%</td></tr>'});
+  $("rank").innerHTML=h+'</table><p class="mut">Basado en '+ST.days+' día(s) evaluados. '+(ST.days>=3?'Los gráficos ya dan más peso a los modelos que mejor acertaron.':'Con 3 días o más, los gráficos empiezan a dar más peso a los que mejor aciertan.')+' «Error medio» es la diferencia promedio entre lo pronosticado el día anterior y lo ocurrido (máxima y mínima); «Lluvia» cuenta los días en que acertó si llovió 1 mm o más. Lo ocurrido es una estimación de Open-Meteo, no una estación. Solo se miden estos 4 modelos: el SMN y los sitios web no se pueden medir desde acá.</p>';
+}
+var mapaOv=null;
+function mapaURL(o){return "https://embed.windy.com/embed2.html?lat="+loc.lat+"&lon="+loc.lon+"&detailLat="+loc.lat+"&detailLon="+loc.lon+"&zoom=7&level=surface&overlay="+o+"&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1"}
+function mapa(o){
+  mapaOv=o||mapaOv||"satellite";
+  $("mapbox").innerHTML='<iframe loading="lazy" title="Mapa del tiempo" src="'+mapaURL(mapaOv)+'"></iframe>';
+  var b=document.querySelectorAll("#tabs button[data-o]");
+  for(var k=0;k<b.length;k++)b[k].className=b[k].getAttribute("data-o")===mapaOv?"on":"";
+}
+var tb=document.querySelectorAll("#tabs button[data-o]");
+for(var k=0;k<tb.length;k++)tb[k].onclick=function(){mapa(this.getAttribute("data-o"))};
+$("amp").onclick=function(){$("big").src=mapaURL(mapaOv||"satellite");$("modal").className="on"};
+$("cerrar").onclick=function(){$("modal").className="";$("big").src="about:blank"};
+$("ref").onclick=cargar;
+$("gps").onclick=function(){
+  if(!navigator.geolocation){$("err").textContent="Este navegador no permite ubicación.";return}
+  navigator.geolocation.getCurrentPosition(function(p){loc={lat:p.coords.latitude,lon:p.coords.longitude,name:"Mi ubicación"};try{localStorage.setItem("clima_loc",JSON.stringify(loc))}catch(e){}cargar()},function(){$("err").textContent="No pude obtener tu ubicación."});
+};
+cargar();
+try{if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js")}catch(e){}
+</script>
+</body>
+</html>
